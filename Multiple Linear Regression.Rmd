@@ -1,0 +1,503 @@
+---
+title: "Multiple Linear Regression"
+author: "Teresiah Karumba"
+date: "2023-07-27"
+output: html_document
+---
+
+############ Problem Statement
+```{r}
+# A real estate company that has a data-set containing the prices of properties in the Delhi region. It wishes to use the data to optimize the sale prices of the properties based on important factors such as area, bedrooms, parking, etc.
+
+# Essentially, the company wants —
+# 
+# To identify the variables affecting house prices, e.g. area, number of rooms, bathrooms, etc.
+# 
+# To create a linear model that quantitatively relates house prices with variables such as number of rooms, area, number of bathrooms, etc.
+# 
+# To know the accuracy of the model, i.e. how well these variables can predict house prices.
+# 
+```
+
+############ Loading Required Packages
+```{r}
+
+pacman::p_load(utils, tidyverse, dplyr, ggplot2, caTools, janitor,caret, DataExplorer, car, corrplot, MASS, dataxray)
+
+```
+
+############ Loading the data set
+```{r}
+house_df <- read.csv("C:/Users/teresiah.karumba/Burn Manufacturing/Marketing - Business Intelligence/BI Automations 2020/Teresiah/Coding Challenges/Multiple Linear Regression/archive/Housing.csv", header = TRUE) %>% clean_names()
+```
+
+############ Data Structure
+```{r}
+
+# house_df %>%
+#      make_xray() %>%
+#      view_xray()
+
+class(house_df) 
+
+#Data belongs to data frame class
+
+dim(house_df) 
+
+#We have 545 rows and 13 columns in our data.
+
+names(house_df) #Column names/headers.
+
+glimpse(house_df)
+
+#In our data-set we basically have numeric and character variables.
+#We will need to transform our character variables into factors before we can start doing further analysis.
+
+summary(house_df)
+
+#From the summary of the data we do not any variable having missing data, so we have a complete data.
+
+
+```
+
+############ Data Manipulation
+```{r}
+
+#Character variables to factors.
+house_df <- house_df %>% mutate(mainroad = as.factor(mainroad),
+                                 guestroom = as.factor(guestroom),
+                                 basement = as.factor(basement),
+                                 hotwaterheating = as.factor(hotwaterheating),
+                                 airconditioning = as.factor(airconditioning),
+                                 prefarea = as.factor(prefarea),
+                                 furnishingstatus = as.factor(furnishingstatus))
+
+glimpse(house_df)
+
+
+```
+
+############ Exploratory Data Analysis
+
+###################### Uni-variate Data Analysis
+```{r}
+
+#Price
+price_plot <- ggplot(data = house_df, aes(x = price)) +
+  geom_histogram(color = "white", fill = "blue", bins = 30) +
+  labs(x = "House Price", y = "Frequency")+
+  ggtitle("Distribution of House Prices") + theme(plot.title = element_text(hjust = 0.5))
+  
+print(price_plot)
+
+#From the above plot we can observe that the prices are skewed to the left and most house cost 5,000,000 and below.
+
+```
+
+```{r}
+
+#Area
+area_plot <- ggplot(data = house_df, aes(x = area)) +
+  geom_histogram(color = "white", fill = "blue", bins = 30) +
+  labs(x = "House Area", y = "Frequency")+
+  ggtitle("Distribution of House Area") + theme(plot.title = element_text(hjust = 0.5))
+  
+print(area_plot)
+
+#From the above plot we can observe that the house areas are skewed to the left and most house areas area 8,000 sqm and below.
+
+```
+
+```{r}
+
+#bedrooms
+
+t1 <- table(house_df$bedrooms)
+
+bed_ <- as.data.frame(t1)
+
+names(bed_) <- c("bed_rooms", "Tally")
+
+bed_plot <- ggplot(bed_, aes(x = bed_rooms, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = bed_rooms, fill = bed_rooms)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+  scale_fill_viridis_d() +
+  ggtitle("Distribution of No. of Bedrooms") + theme(plot.title = element_text(hjust = 0.5))
+
+print(bed_plot)
+
+#Most house have 3 bedrooms and very few have 1 and 6 bedrooms.
+
+```
+
+```{r}
+
+#bathrooms
+
+t2 <- table(house_df$bathrooms)
+
+baths_ <- as.data.frame(t2)
+
+names(baths_) <- c("bath_rooms", "Tally")
+
+baths_plot <- ggplot(baths_, aes(x = bath_rooms, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = bath_rooms, fill = bath_rooms)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+  scale_fill_viridis_d() +
+  ggtitle("Distribution of No. of Bathrooms") + theme(plot.title = element_text(hjust = 0.5))
+
+print(baths_plot)
+
+#Almost all houses have 1 bathroom.
+
+```
+
+```{r}
+
+#storeys
+
+t3 <- table(house_df$stories)
+
+stories_ <- as.data.frame(t3)
+
+names(stories_) <- c("Storeys", "Tally")
+
+storeys_plot <- ggplot(stories_, aes(x = Storeys, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = Storeys, fill = Storeys)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+  scale_fill_viridis_d() +
+  ggtitle("Distribution of No. of Storeys") + theme(plot.title = element_text(hjust = 0.5))
+
+print(storeys_plot)
+
+#More than half of the houses have 1 or 2 storeys.
+
+```
+
+```{r}
+
+#mainroad
+mainroad_ratio <- house_df %>% 
+  group_by(mainroad) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+main_plot <- ggplot(mainroad_ratio, aes(x = "", y = perc, fill = mainroad)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses Along Main Road")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(main_plot)
+
+#86% of the houses are located along the main road.
+
+```
+
+```{r}
+
+#guestrooms
+guest_ratio <- house_df %>% 
+  group_by(guestroom) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+guest_plot <- ggplot(guest_ratio, aes(x = "", y = perc, fill = guestroom)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses with Guest Rooms")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(guest_plot)
+
+#82% of the houses do not have guestrooms.
+
+```
+
+```{r}
+
+#basement
+basement_ratio <- house_df %>% 
+  group_by(basement) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+basement_plot <- ggplot(basement_ratio, aes(x = "", y = perc, fill = basement)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses with Basement")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(basement_plot)
+
+#65% of the houses do not have basement.
+
+```
+
+```{r}
+
+#hotwaterheating
+hot_ratio <- house_df %>% 
+  group_by(hotwaterheating) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+hot_plot <- ggplot(hot_ratio, aes(x = "", y = perc, fill = hotwaterheating)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses with Hot Water Heating")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(hot_plot)
+
+#95% of the houses do not hot water heating.
+
+```
+
+```{r}
+
+#airconditioning
+air_ratio <- house_df %>% 
+  group_by(airconditioning) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+air_plot <- ggplot(air_ratio, aes(x = "", y = perc, fill = airconditioning)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses with Air Conditioning")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(air_plot)
+
+#Only 32% of the house have air conditioning facilities.
+
+```
+
+```{r}
+
+#prefarea
+prefarea_ratio <- house_df %>% 
+  group_by(prefarea) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+prefarea_plot <- ggplot(prefarea_ratio, aes(x = "", y = perc, fill = prefarea)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Houses with prefarea")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+print(prefarea_plot)
+
+#Only 23% of the house have prefarea.
+
+```
+
+```{r}
+
+#parking
+
+t4 <- table(house_df$parking)
+
+parking_ <- as.data.frame(t4)
+
+names(parking_) <- c("Parking_spaces", "Tally")
+
+parking_plot <- ggplot(parking_, aes(x = Parking_spaces, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = Parking_spaces, fill = Parking_spaces)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+  scale_fill_viridis_d() +
+  ggtitle("Distribution of No. of Parking spaces") + theme(plot.title = element_text(hjust = 0.5))
+
+print(parking_plot)
+
+#More than half of the houses do not parking spaces.
+
+```
+
+```{r}
+
+#furnishingstatus
+
+t5 <- table(house_df$furnishingstatus)
+
+furnish_ <- as.data.frame(t5)
+
+names(furnish_) <- c("furnishingstatus", "Tally")
+
+furnish_plot <- ggplot(furnish_, aes(x = furnishingstatus, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = furnishingstatus, fill = furnishingstatus)) +
+  theme(axis.text.x = element_text(angle = 0, hjust = 1)) +
+  scale_fill_viridis_d() +
+  ggtitle("Distribution of No. of Furnished Houses") + theme(plot.title = element_text(hjust = 0.5))
+
+print(furnish_plot)
+
+#Majority of the houses are semi-furnished.
+
+```
+
+#Faster Data Exploration
+```{r}
+
+#Using Data Explorer package to do all of the above.
+
+# create_report(house_df)
+
+```
+
+#Split data into Train and Test Data
+```{r}
+# Proportion of data to allocate to the training set (70%) using library caret
+set.seed(123)
+
+train_proportion <- 0.7
+
+# Create the data partition to split the data
+data_split <- createDataPartition(house_df$price, p = train_proportion, list = FALSE)
+
+# Create the training set
+training_df <- house_df[data_split, ]
+
+# Create the test set
+test_df <- house_df[-data_split, ]
+
+```
+
+#Model Building
+```{r}
+#Using all the independent variables
+lm.out <- lm(training_df$price ~ ., data = training_df)
+summary(lm.out)
+
+```
+```{r}
+#Model Summary
+
+# From the above model consisting of all the predictor variables the significant variables are area, bathrooms, mainroad,basement, hotwaterheating, aircondition, parking,prefarea and furnishingstatusunfinished which have a p-value of less than 0.05.
+
+# The model has a coefficient of variation of 0.6946 meaning 69% of the price variation can be explained by the predictor variables in the our model.
+
+# The adjusted R2 is the same as R2 only that it accounts for the complexity of the model. The difference is that in the case of R2 if we increase the number of the predictor variables the R2 will increase even if the variable does not have any statistical significance whereas adjusted R2 penalizes that kind scenario.
+
+# Next we can test the model assumptions and actually narrow down to a few variables that are actually significant to fit our model.
+
+```
+
+#Test for Model Assumptions
+
+# 1. Linearity of Relationship
+```{r}
+# There has to be a linear relationship between the dependent and independent variables. We will assess if the residuals appear to form an equal spread around the horizontal line without distance patterns.
+
+plot(lm.out, 1)
+
+# From the plot we can observe linear relationship between the fitted line and residual values if the model residuals.
+```
+
+# 2. Independence of Variables (Multicollinearity)
+```{r}
+# We will use VIF - Variance Inflation Factor to test for multicollinearity. VIF is a measure of the amount of multicollinearity in regression analysis.
+# Remove multicollinearity using VIF
+# If VIF equal 1 then the variables are not correlated.
+# VIF between 1 and 5 - variables are moderately correlated.
+# VIF > 5 -  variables are highly correlated.
+# The higher the VIF, the higher the possibility that multicollinearity exists that needs further research done.
+
+# As a rule of thumb, a VIF of three or below should not be a cause for concern.
+
+model1 <- lm(price ~ ., data = training_df)
+vif(model1) #Our data doesn't seem to have any multicollinearity
+
+# cor(training_df)
+# 
+# corrplot(cor(training_df))
+
+```
+
+# 3. Normal Distribution of Residuals
+```{r}
+# This test is to ensure that there are no other significant relationships that could be explaining the variance that have not been taken into account in the linear regression. 
+
+
+plot(lm.out, 2)
+
+# The plot shows the normal distribution of the residuals for lm.out with the points tending to follow the straight line.
+
+```
+# 4. Homoscedasticty or Equal Variance of Variables
+```{r}
+# Used to determine if the error terms is the same across all values of the independent variable. Here we are looking for a constant spread of the residuals.
+
+plot(lm.out, 3)
+
+# The plot appears to show the relatively equal variance of residuals across the variable range. Residuals are evenly distributed across the range and do not appear spread or narrow at any point
+```
+
+# Stepwise Regresssion
+```{r}
+
+# Compare all the possible models
+null=lm(price ~ 1, data = training_df) # only with intercept predictor
+extractAIC(null)
+
+full=lm(price ~ ., data = training_df) # with all predictor
+extractAIC(full)
+
+#backward elimination method - start with all predictor and eliminates one by one
+#It decides final set of variable based on their AIC value
+stepAIC(full, direction = 'backward')
+
+stepAIC(null, scope = list(lower = null, upper = full), direction = 'forward')
+
+finalModel <- lm(price ~ area + bathrooms + stories + mainroad + guestroom + basement +
+                   hotwaterheating + airconditioning + parking + prefarea + furnishingstatus , data =                       training_df) #The combination of variables that gives us the lowest AIC value
+
+summary(finalModel)
+
+```
+
+
